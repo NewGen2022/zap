@@ -3,6 +3,19 @@ const { PrismaClient } = require('@prisma/client');
 // Create a single instance of PrismaClient to interact with the database
 const prismaClient = new PrismaClient();
 
+const checkDatabaseConnection = async () => {
+    try {
+        // Attempt to connect to the database
+        await prismaClient.$connect();
+        console.log('Successfully connected to the database');
+    } catch (err) {
+        console.error('Error connecting to the database:', error);
+        process.exit(1);
+    }
+};
+
+checkDatabaseConnection();
+
 // Gracefully handle application shutdown when receiving SIGINT (Ctrl + C)
 process.on('SIGINT', async () => {
     try {
