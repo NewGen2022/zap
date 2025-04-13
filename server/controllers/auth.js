@@ -95,7 +95,7 @@ const loginUser = async (req, res) => {
         });
 
         // Create the access token (short-lived)
-        const accessToken = createAccessToken(user);
+        const accessToken = await createAccessToken(user);
         // Store token in httpOnly cookies
         res.cookie('accessToken', accessToken, {
             httpOnly: true,
@@ -106,7 +106,7 @@ const loginUser = async (req, res) => {
         });
 
         // Create the refresh token (long-lived)
-        const refreshToken = createRefreshToken(user);
+        const refreshToken = await createRefreshToken(user);
         // Store token in httpOnly cookies
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
@@ -123,6 +123,7 @@ const loginUser = async (req, res) => {
 
         res.status(200).json({
             message: 'Login successful',
+            accessToken: accessToken,
         });
     } catch (err) {
         console.error('Login error:', err);
@@ -175,7 +176,7 @@ const refreshAccessToken = async (req, res) => {
         }
 
         // Create the access token (short-lived)
-        const accessToken = createAccessToken(user);
+        const accessToken = await createAccessToken(user);
         // Store token in httpOnly cookies
         res.cookie('accessToken', accessToken, {
             httpOnly: true,
