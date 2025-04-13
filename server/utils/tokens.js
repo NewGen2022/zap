@@ -5,7 +5,7 @@ const createAccessToken = async (user) => {
     return jwt.sign(
         {
             userId: user.id,
-            username: user.username,
+            role: user.role,
         },
         process.env.JWT_ACCESS_SECRET,
         { expiresIn: '1h', algorithm: 'HS256' }
