@@ -39,6 +39,7 @@ const validateUserInput = [
         .normalizeEmail(),
 ];
 
+// Login validation
 const validateLoginInput = [
     body('loginData').notEmpty().withMessage('Username or email is required'),
 
@@ -47,8 +48,33 @@ const validateLoginInput = [
 
 const loginAttempts = new Map(); // IP -> {count, lastAttempt}
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_TIME = 15 * 60 * 1000;
+const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * Middleware: checkRateLimit
+ *
+ * Purpose:
+ *   Prevent brute-force attacks by limiting the number of login attempts from a single IP.
+ *
+ * Description:
+ *   This middleware checks whether the number of login attempts coming from the client's IP
+ *   has exceeded a defined threshold (MAX_LOGIN_ATTEMPTS) within a given period (LOCKOUT_TIME).
+ *   If the client exceeds the limit, the middleware responds with a 429 status code and an error message.
+ *   Otherwise, it increments the attempt counter and allows the request to proceed.
+ *
+ * Parameters:
+ *   @param {object} req - Express request object. Expects to contain the client's IP.
+ *   @param {object} res - Express response object.
+ *   @param {function} next - Express next middleware function.
+ *
+ * Side Effects:
+ *   - The middleware updates an in-memory Map (loginAttempts) to track the number of attempts
+ *     and the timestamp of the last attempt.
+ *   - On exceeding the limit, it sends a response and does not call next().
+ *
+ * Usage:
+ *   app.post('/login', checkRateLimit, loginUser);
+ */
 const checkRateLimit = (req, res, next) => {
     // Get client IP
     const clientIp = requestIp.getClientIp(req);
@@ -73,7 +99,7 @@ const checkRateLimit = (req, res, next) => {
     if (attempts.count >= MAX_LOGIN_ATTEMPTS) {
         // Calculate time remaining in lockout
         const remainingTime = Math.ceil(
-            ((LOCKOUT_TIME - (now - attempts.lastAttempt)) / 60) * 1000
+            (LOCKOUT_TIME - (now - attempts.lastAttempt)) / 60000
         );
 
         return res.status(429).json({
@@ -90,10 +116,49 @@ const checkRateLimit = (req, res, next) => {
     next();
 };
 
+/**
+ * resetLoginAttempts
+ *
+ * Purpose:
+ *   Resets the login attempt counter for a given IP address.
+ *
+ * Description:
+ *   This function deletes the entry for the specified IP address from the
+ *   in-memory loginAttempts Map. This is typically called upon a successful
+ *   login to clear any previous failed login attempts associated with that IP.
+ *
+ * Parameters:
+ *   @param {string} ip - The IP address whose login attempts should be cleared.
+ *
+ * Returns:
+ *   Nothing; it simply removes the record.
+ */
 const resetLoginAttempts = (ip) => {
     loginAttempts.delete(ip);
 };
 
+/**
+ * handleValidationErrors
+ *
+ * Purpose:
+ *   Checks for validation errors in the request. If any errors are present,
+ *   it sends a 400 response with an array of error messages.
+ *
+ * Description:
+ *   This middleware uses express-validator's `validationResult` to gather errors
+ *   from the request object. If errors exist, it maps them to an array of messages
+ *   and returns an HTTP 400 response with the error details. If no errors are found,
+ *   it calls `next()` to pass control to the next middleware in the chain.
+ *
+ * Parameters:
+ *   @param {object} req - Express request object, which should contain the result of previous validations.
+ *   @param {object} res - Express response object.
+ *   @param {function} next - Callback to pass control to the next middleware.
+ *
+ * Returns:
+ *   If validation errors are present, sends a JSON response with status 400.
+ *   Otherwise, calls `next()` to continue processing the request.
+ */
 const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
