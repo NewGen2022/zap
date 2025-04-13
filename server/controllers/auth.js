@@ -89,6 +89,7 @@ const loginUser = async (req, res) => {
         // Log successful login for security monitoring
         console.log(`User "${user.username}" logged in successfully`, {
             userId: user.id,
+            userRole: user.role,
             timestamp: new Date().toISOString(),
             ...clientInfo,
         });
@@ -96,7 +97,7 @@ const loginUser = async (req, res) => {
         // Create the access token (short-lived)
         const accessToken = createAccessToken(user);
         // Store token in httpOnly cookies
-        res.cookie('access_token', accessToken, {
+        res.cookie('accessToken', accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
             maxAge: 3600000, // 1 hour
@@ -107,7 +108,7 @@ const loginUser = async (req, res) => {
         // Create the refresh token (long-lived)
         const refreshToken = createRefreshToken(user);
         // Store token in httpOnly cookies
-        res.cookie('refresh_token', refreshToken, {
+        res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
             maxAge: 259200000, // 3 days
@@ -133,14 +134,14 @@ const loginUser = async (req, res) => {
 
 const logoutUser = async (req, res) => {
     try {
-        res.clearCookie('access_token', {
+        res.clearCookie('accessToken', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
             sameSite: 'Strict',
             path: '/',
         });
 
-        res.clearCookie('refresh_token', {
+        res.clearCookie('refreshToken', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
             sameSite: 'Strict',
@@ -156,7 +157,7 @@ const logoutUser = async (req, res) => {
 
 const refreshAccessToken = async (req, res) => {
     try {
-        const refreshToken = req.cookies.refresh_token;
+        const refreshToken = req.cookies.refreshToken;
         if (!refreshToken) {
             return res.status(401).json({ msg: 'Refresh token not found' });
         }
@@ -176,7 +177,7 @@ const refreshAccessToken = async (req, res) => {
         // Create the access token (short-lived)
         const accessToken = createAccessToken(user);
         // Store token in httpOnly cookies
-        res.cookie('access_token', accessToken, {
+        res.cookie('accessToken', accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
             maxAge: 3600000, // 1 hour
