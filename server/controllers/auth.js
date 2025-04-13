@@ -52,10 +52,14 @@ const loginUser = async (req, res) => {
         // loginData is - username or email
         const { loginData, password } = req.body;
 
+        const clientInfo = {
+            ip: requestIp.getClientIp(req),
+            userAgent: req.headers['user-agent'] || 'null',
+        };
+
         const isEmail = loginData.includes('@');
 
         let user;
-
         if (isEmail) {
             user = await getUserByEmailDB(loginData);
         } else {
@@ -63,7 +67,6 @@ const loginUser = async (req, res) => {
         }
 
         const invalidCredentialsMsg = 'Invalid credentials. Please try again.';
-
         if (!user) {
             return res.status(401).json({
                 msg: invalidCredentialsMsg,
@@ -78,11 +81,6 @@ const loginUser = async (req, res) => {
             });
         }
 
-        const clientInfo = {
-            ip: requestIp.getClientIp(req),
-            userAgent: req.headers['user-agent'] || 'null',
-        };
-
         // If login successful, reset rate limit counter
         resetLoginAttempts(clientInfo.ip);
 
@@ -96,25 +94,9 @@ const loginUser = async (req, res) => {
 
         // Create the access token (short-lived)
         const accessToken = await createAccessToken(user);
-        // Store token in httpOnly cookies
-        res.cookie('accessToken', accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'prod',
-            maxAge: 3600000, // 1 hour
-            sameSite: 'Strict',
-            path: '/',
-        });
-
         // Create the refresh token (long-lived)
         const refreshToken = await createRefreshToken(user);
-        // Store token in httpOnly cookies
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'prod',
-            maxAge: 259200000, // 3 days
-            sameSite: 'Strict',
-            path: '/api/refresh',
-        });
+        setAuthCookies(res, accessToken, refreshToken);
 
         // Set security headers
         res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -135,20 +117,7 @@ const loginUser = async (req, res) => {
 
 const logoutUser = async (req, res) => {
     try {
-        res.clearCookie('accessToken', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'prod',
-            sameSite: 'Strict',
-            path: '/',
-        });
-
-        res.clearCookie('refreshToken', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'prod',
-            sameSite: 'Strict',
-            path: '/api/refresh',
-        });
-
+        clearAuthCookies(res);
         res.status(200).json({ message: 'Logout successful' });
     } catch (err) {
         console.error('Logout error:', err);
