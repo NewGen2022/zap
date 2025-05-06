@@ -1,16 +1,21 @@
 const prismaClient = require('../prismaClient');
 
-const createUser = async (username, email, password) => {
+const createUser = async (username, email, phoneNumber, password) => {
     if (!username) throw new Error('No username provided');
-    if (!email) throw new Error('No email provided');
     if (!password) throw new Error('No password provided');
 
     try {
         const newUser = await prismaClient.user.create({
             data: {
                 username,
-                email,
+                email: email || null,
+                phoneNumber: phoneNumber || null,
                 password,
+            },
+            select: {
+                username: true,
+                email: true,
+                phoneNumber: true,
             },
         });
 
@@ -56,12 +61,28 @@ const getUserByEmailDB = async (email) => {
     }
 };
 
+const getUserByPhoneNumberDB = async (phoneNumber) => {
+    if (!phoneNumber) throw new Error('No phone number provided');
+
+    try {
+        const user = await prismaClient.user.findUnique({
+            where: { phoneNumber },
+        });
+
+        return user;
+    } catch (err) {
+        throw new Error(
+            'Error while finding user by phone number: ' + err.message
+        );
+    }
+};
+
 const getUserById = async (userId) => {
     if (!userId) throw new Error('No "user id" is provided');
 
     try {
         const user = await prismaClient.user.findUnique({
-            data: { id: userId },
+            where: { id: userId },
         });
 
         return user;
@@ -74,5 +95,6 @@ module.exports = {
     createUser,
     getUserByUsernameDB,
     getUserByEmailDB,
+    getUserByPhoneNumberDB,
     getUserById,
 };
