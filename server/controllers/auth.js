@@ -5,19 +5,32 @@ require('dotenv').config();
 const {
     getUserByUsernameDB,
     getUserByEmailDB,
+    getUserByPhoneNumberDB,
     getUserById,
     createUser,
 } = require('../db/queries/userQueries');
 const { resetLoginAttempts } = require('../middleware/auth');
 const { createAccessToken, createRefreshToken } = require('../utils/tokens');
+const { normalizePhoneNumber } = require('../utils/phoneNumber');
 
 const registerUser = async (req, res) => {
-    const { username, password, confirmPassword, email } = req.body;
+    const { username, password, confirmPassword, email, phoneNumber } =
+        req.body;
 
-    // Check if the email already exists
-    const existingEmail = await getUserByEmailDB(email);
-    if (existingEmail) {
-        return res.status(400).json({ msg: 'Email is already taken' });
+    if (email) {
+        // Check if the email already exists
+        const existingEmail = await getUserByEmailDB(email);
+        if (existingEmail) {
+            return res.status(400).json({ msg: 'Email is already taken' });
+        }
+    }
+
+    if (phoneNumber) {
+        // Check if the phone number already exists
+        const existingPhoneNumber = await getUserByPhoneNumberDB(phoneNumber);
+        if (existingPhoneNumber) {
+            return res.status(400).json({ msg: 'Wrong phone number' });
+        }
     }
 
     // Check if the username already exists
@@ -31,7 +44,18 @@ const registerUser = async (req, res) => {
 
     // Create the new user in the database
     try {
-        const newUser = await createUser(username, email, hashedPassword);
+        let normalizedPhoneNumber = undefined;
+        if (phoneNumber) {
+            // Normalize phone number to E.164 format
+            normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+        }
+
+        const newUser = await createUser(
+            username,
+            email,
+            normalizedPhoneNumber,
+            hashedPassword
+        );
 
         // Respond with the created user data (except the password)
         const { password: _, ...userResponse } = newUser;
