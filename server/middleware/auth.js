@@ -1,6 +1,7 @@
 const { body, validationResult } = require('express-validator');
 const requestIp = require('request-ip');
 const jwt = require('jsonwebtoken');
+const { isValidPhoneNumber } = require('libphonenumber-js');
 
 // Email and password validation rules
 const validateUserInput = [
@@ -35,14 +36,35 @@ const validateUserInput = [
         .withMessage('Passwords must match'),
 
     body('email')
+        .optional()
         .isEmail()
         .withMessage('Invalid email format')
         .normalizeEmail(),
+
+    body('phoneNumber')
+        .optional()
+        .custom((value) => {
+            if (!isValidPhoneNumber(value)) {
+                throw new Error(
+                    'Invalid phone number format. Example: +12XXXXXXXXX'
+                );
+            }
+            return true;
+        }),
+
+    body().custom((_, { req }) => {
+        if (!req.body.email && !req.body.phoneNumber) {
+            throw new Error('At least email or phone number is required');
+        }
+        return true;
+    }),
 ];
 
 // Login validation
 const validateLoginInput = [
-    body('loginData').notEmpty().withMessage('Username or email is required'),
+    body('loginData')
+        .notEmpty()
+        .withMessage('Username, phone number or email is required'),
 
     body('password').notEmpty().withMessage('Password is required'),
 ];
