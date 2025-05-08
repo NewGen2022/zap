@@ -20,22 +20,34 @@ model User {
 
   timezone     String?
   isBanned     Boolean   @default(false)
+  isDeleted    Boolean   @default(false)
   lastActiveAt DateTime?
 
   mediaId String?
-  profPic Media?  @relation(fields: [mediaId], references: [id])
+  profPic Media?  @relation("UserProfilePictures", fields: [mediaId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isEmailVerified Boolean @default(false)
+  isPhoneVerified Boolean @default(false)
 
-  // Relations
-  ConversationMember ConversationMember[]
-  MessageReaction    MessageReaction[]
-  MessageSeen        MessageSeen[]
-  ActionLog          ActionLog[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-  sentMessages      Message[] @relation("MessageSender")
-  forwardedMessages Message[] @relation("MessageForwardedFrom")
+  ConversationMember      ConversationMember[]
+  MessageReaction         MessageReaction[]
+  MessageSeen             MessageSeen[]
+  ActionLog               ActionLog[]
+  CredentialsVerification CredentialsVerification[]
+  sentMessages            Message[]                 @relation("MessageSender")
+  forwardedMessages       Message[]                 @relation("MessageForwardedFrom")
+  UserSettings            UserSettings?
+
+  blockedUsers     BlockedUser[]      @relation("Blocker")
+  blockedBy        BlockedUser[]      @relation("Blocked")
+  MessageDeletedBy MessageDeletedBy[]
+
+  @@index([isDeleted])
+  @@index([lastActiveAt])
 }
 
 model Conversation {
@@ -53,8 +65,19 @@ model Conversation {
   ConversationMember ConversationMember[]
 }
 
+model MessageDeletedBy {
+  messageId String
+  userId    String
+  deletedAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@id([messageId, userId])
+}
+
 model ConversationMember {
-  id             String           @default(uuid())
+  id             String           @id @default(uuid())
   userId         String
   conversationId String
   role           ConversationRole @default(MEMBER)
@@ -63,7 +86,7 @@ model ConversationMember {
   user         User         @relation(fields: [userId], references: [id])
   conversation Conversation @relation(fields: [conversationId], references: [id])
 
-  @@id([userId, conversationId])
+  @@unique([userId, conversationId])
 }
 
 model Message {
@@ -74,8 +97,9 @@ model Message {
   isEdited  Boolean            @default(false)
   isPinned  Boolean            @default(false)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   conversationId             String?
   mediaId                    String?
@@ -98,6 +122,11 @@ model Message {
   MessageReaction    MessageReaction[]
   MessageEditHistory MessageEditHistory[]
   MessageSeen        MessageSeen[]
+  MessageDeletedBy   MessageDeletedBy[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([isDeleted])
 }
 
 model MessageEditHistory {
@@ -134,16 +163,6 @@ model MessageSeen {
   @@id([userId, messageId])
 }
 
-model ActionLog {
-  id        String   @id @default(uuid())
-  userId    String
-  action    String
-  entityId  String?
-  timestamp DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-}
-
 model Media {
   id           String          @id @default(uuid())
   url          String          @unique
@@ -152,9 +171,57 @@ model Media {
   size         Int
   mimeType     String
 
-  users         User[]
+  users         User[]         @relation("UserProfilePictures")
   conversations Conversation[]
   messages      Message[]
+}
+
+model CredentialsVerification {
+  id        String           @id @default(uuid())
+  user      User             @relation(fields: [userId], references: [id])
+  token     String           @unique
+  type      VerificationType
+  expiresAt DateTime
+  isUsed    Boolean?
+  createdAt DateTime         @default(now())
+
+  userId String
+
+  @@index([expiresAt])
+}
+
+model UserSettings {
+  id                   String  @id @default(uuid())
+  user                 User    @relation(fields: [userId], references: [id])
+  language             String? @default("en")
+  darkMode             Boolean @default(false)
+  notificationsEnabled Boolean @default(true)
+
+  userId String @unique
+}
+
+model BlockedUser {
+  id      String @id @default(uuid())
+  blocker User   @relation("Blocker", fields: [blockerId], references: [id])
+  blocked User   @relation("Blocked", fields: [blockedId], references: [id])
+
+  blockerId String
+  blockedId String
+
+  @@unique([blockerId, blockedId])
+}
+
+model ActionLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  entityId  String?
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([timestamp])
 }
 
 enum ConversationType {
@@ -189,4 +256,10 @@ enum StoredMediaType {
   MEDIA_AUDIO
   MEDIA_DOCUMENT
   MEDIA_OTHER
+}
+
+enum VerificationType {
+  EMAIL
+  PHONE
+  PASSWORD_RESET
 }
