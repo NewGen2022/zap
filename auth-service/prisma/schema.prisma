@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("AUTH_DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  username    String   @unique
+  email       String?  @unique
+  phoneNumber String?  @unique
+  password    String
+  role        UserRole @default(USER)
+
+  isEmailVerified Boolean @default(false)
+  isPhoneVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  credentialVerifications VerificationToken[]
+}
+
+// model to store tokens that used for email/phone verification, 
+// and for password resetting
+model VerificationToken {
+  id        String           @id @default(uuid())
+  userId    String
+  tokenHash String           @unique
+  type      VerificationType
+  expiresAt DateTime
+  isUsed    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([type])
+}
+
+// model to store tokens that used 
+
+enum UserRole {
+  USER
+  MODERATOR
+  ANALYTICS
+  ADMIN
+  CREATOR
+}
+
+enum VerificationType {
+  EMAIL
+  PHONE
+  PASSWORD_RESET
+}
