@@ -8,6 +8,7 @@ const {
     getUserByPhoneNumberDB,
     getUserById,
     createUser,
+    updatePassword,
 } = require('../db/queries/userQueries');
 const { resetLoginAttempts } = require('../middleware/rateLimit');
 const {
@@ -17,8 +18,13 @@ const {
 } = require('../utils/tokens');
 const { normalizePhoneNumber } = require('../utils/phoneNumber');
 const { setAuthCookies, clearAuthCookies } = require('../utils/cookies');
-const { addToken } = require('../db/queries/tokenQueries');
+const {
+    addToken,
+    getByVerificationToken,
+    updateVerificationToken,
+} = require('../db/queries/tokenQueries');
 const { sendToMail } = require('../utils/sendMsgs');
+const { createHash } = require('crypto');
 
 const registerUser = async (req, res) => {
     const { username, password, confirmPassword, email, phoneNumber } =
@@ -255,7 +261,69 @@ const forgotPassword = async (req, res) => {
     }
 };
 
-const resetPassword = async (req, res) => {};
+const resetPassword = async (req, res) => {
+    let { token, newPassword, confirmPassword } = req.body;
+
+    if (!token) {
+        console.error('No valid token for password resetting is provided');
+        return res
+            .status(400)
+            .json({ msg: 'No valid verification token provided' });
+    }
+
+    newPassword = newPassword.trim();
+    confirmPassword = confirmPassword.trim();
+
+    if (newPassword !== confirmPassword) {
+        console.error('Passwords do not match');
+        return res.status(400).json({ msg: 'Passwords do not match' });
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    let tokenRecord;
+    let userId;
+    const now = new Date();
+
+    try {
+        tokenRecord = await getByVerificationToken(tokenHash);
+        if (!tokenRecord || tokenRecord.isUsed || tokenRecord.expiresAt < now) {
+            console.warn(
+                `Invalid password reset attempt for token: ${tokenHash}`,
+                {
+                    found: !!tokenRecord,
+                    isUsed: tokenRecord?.isUsed,
+                    expiresAt: tokenRecord?.expiresAt,
+                    now,
+                }
+            );
+            return res.status(400).json({
+                msg: 'Invalid or expired token. Please request a new password reset.',
+            });
+        }
+
+        userId = tokenRecord.userId;
+    } catch (err) {
+        console.error('Error fetching user by token:', err);
+        return res.status(500).json({ msg: 'Internal server error' });
+    }
+
+    await updateVerificationToken(tokenRecord.id);
+
+    try {
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        const updatedUser = await updatePassword(userId, hashedPassword);
+        return res.status(200).json({
+            msg: 'Password updated successfully',
+            userId: updatedUser.id,
+        });
+    } catch (err) {
+        console.error('Error updating password:', err);
+        return res
+            .status(500)
+            .json({ msg: 'Could not update password. Try again later.' });
+    }
+};
 
 module.exports = {
     registerUser,
