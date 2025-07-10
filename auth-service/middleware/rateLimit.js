@@ -1,3 +1,4 @@
+const requestIp = require('request-ip');
 const loginAttempts = new Map(); // IP -> {count, lastAttempt}
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
