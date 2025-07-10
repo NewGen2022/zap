@@ -36,6 +36,7 @@ const getUserByUsernameDB = async (username) => {
             select: {
                 id: true,
                 username: true,
+                password: true,
             },
         });
 
@@ -60,6 +61,7 @@ const getUserByEmailDB = async (email) => {
             select: {
                 id: true,
                 email: true,
+                password: true,
             },
         });
 
@@ -106,10 +108,33 @@ const getUserById = async (userId) => {
     }
 };
 
+const updatePassword = async (userId, newPassword) => {
+    if (!userId) throw new Error('No user id is provided');
+    if (!newPassword) throw new Error('No new password is provided');
+
+    try {
+        const userInfo = await prismaClient.user.update({
+            where: { id: userId },
+            data: {
+                password: newPassword,
+            },
+            select: {
+                id: true,
+                password: true,
+            },
+        });
+
+        return userInfo;
+    } catch (err) {
+        throw new Error("Error while updating user's password: " + err.message);
+    }
+};
+
 module.exports = {
     createUser,
     getUserByUsernameDB,
     getUserByEmailDB,
     getUserByPhoneNumberDB,
     getUserById,
+    updatePassword,
 };
