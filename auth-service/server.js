@@ -1,5 +1,7 @@
 const express = require('express');
-const authRouter = require('./routes/auth');
+const userRouter = require('./routes/user');
+const passwordRouter = require('./routes/password');
+const tokenRouter = require('./routes/token');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
@@ -17,7 +19,9 @@ server.use(express.urlencoded({ extended: true }));
 server.use(cookieParser());
 
 // Route for all auth-related operations (register, login, reset password, etc.)
-server.use('/api/v1/auth', authRouter);
+server.use('/api/v1/auth', userRouter);
+server.use('/api/v1/auth', passwordRouter);
+server.use('/api/v1/auth', tokenRouter);
 
 // Start listening for HTTP requests
 server.listen(PORT, () => {
