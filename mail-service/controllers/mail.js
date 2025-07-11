@@ -59,9 +59,9 @@ The Support Team`;
                     <p>We received a request to reset your account password. You can securely reset it by clicking the button below:</p>
                     <p style="text-align: center; margin: 30px;">
                         <a href="${link}" style="
-                            background-color: #0d32b8ff;
+                            background-color: #007BFF;
                             color: white;
-                            padding: 14px 28px;
+                            padding: 10px 25px;
                             text-decoration: none;
                             border-radius: 5px;
                             display: inline-block;
