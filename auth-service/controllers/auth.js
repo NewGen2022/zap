@@ -31,7 +31,7 @@ const registerUser = async (req, res) => {
         req.body;
 
     if (email) {
-        // Check if the email already exists
+        // Defensive uniqueness check for email to avoid duplicate accounts
         const existingEmail = await getUserByEmailDB(email);
         if (existingEmail) {
             return res.status(400).json({ msg: 'Email is already taken' });
@@ -39,27 +39,26 @@ const registerUser = async (req, res) => {
     }
 
     if (phoneNumber) {
-        // Check if the phone number already exists
+        // Defensive uniqueness check for phone numbers for same reason
         const existingPhoneNumber = await getUserByPhoneNumberDB(phoneNumber);
         if (existingPhoneNumber) {
             return res.status(400).json({ msg: 'Wrong phone number' });
         }
     }
 
-    // Check if the username already exists
+    // Prevent duplicate usernames
     const existingUser = await getUserByUsernameDB(username);
     if (existingUser) {
         return res.status(400).json({ msg: 'Username is already taken' });
     }
 
-    // Hash the password before saving to the database
-    const hashedPassword = await bcrypt.hash(password, 10); // Use bcrypt for hashing
+    // Always hash passwords before storing to protect against DB leaks
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create the new user in the database
     try {
-        let normalizedPhoneNumber = undefined;
+        let normalizedPhoneNumber;
         if (phoneNumber) {
-            // Normalize phone number to E.164 format
+            // Normalize to E.164 format so we store consistent phone data
             normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
         }
 
@@ -70,15 +69,16 @@ const registerUser = async (req, res) => {
             hashedPassword
         );
 
-        // Respond with the created user data (except the password)
+        // Exclude password from returned user object
         const { password: _, ...userResponse } = newUser;
-        res.status(201).json({
+
+        return res.status(201).json({
             message: 'User registered successfully',
             user: userResponse,
         });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({
+        console.error('Register error:', err);
+        return res.status(500).json({
             error: 'Internal Server Error during user registration',
         });
     }
@@ -86,14 +86,15 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
     try {
-        // loginData is - username or email
         const { loginData, password } = req.body;
 
+        // Capture client IP and user agent for rate limiting + security logging
         const clientInfo = {
             ip: requestIp.getClientIp(req),
             userAgent: req.headers['user-agent'] || 'null',
         };
 
+        // Decide whether user input is email or username
         const isEmail = loginData.includes('@');
 
         let user;
@@ -103,46 +104,42 @@ const loginUser = async (req, res) => {
             user = await getUserByUsernameDB(loginData);
         }
 
+        // Always use same generic error message to avoid leaking if user exists
         const invalidCredentialsMsg = 'Invalid credentials. Please try again.';
         if (!user) {
-            return res.status(401).json({
-                msg: invalidCredentialsMsg,
-            });
+            return res.status(401).json({ msg: invalidCredentialsMsg });
         }
 
-        // Compare the password with the hashed password stored in the database
+        // Validate provided password against stored bcrypt hash
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-            return res.status(401).json({
-                msg: invalidCredentialsMsg,
-            });
+            return res.status(401).json({ msg: invalidCredentialsMsg });
         }
 
-        // If login successful, reset rate limit counter
+        // Successful login -> reset rate limiting attempts to prevent lockouts
         resetLoginAttempts(clientInfo.ip);
 
-        // Log successful login for security monitoring
+        // Security audit log for successful login attempts
         console.log(`User "${user.username}" logged in successfully`, {
             userId: user.id,
-            userRole: user.role,
+            userRole: user.role, // optional: may not exist
             timestamp: new Date().toISOString(),
             ...clientInfo,
         });
 
-        // Create the access token (short-lived)
+        // Issue JWT tokens + store refresh securely in HTTP-only cookie
         const accessToken = await createAccessToken(user);
-        // Create the refresh token (long-lived)
         const refreshToken = await createRefreshToken(user);
         setAuthCookies(res, accessToken, refreshToken);
 
-        // Set security headers
+        // Harden response with common secure headers
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('X-Frame-Options', 'DENY');
         res.setHeader('X-XSS-Protection', '1; mode=block');
 
         return res.status(200).json({
             message: 'Login successful',
-            accessToken: accessToken,
+            accessToken,
         });
     } catch (err) {
         console.error('Login error:', err);
@@ -154,11 +151,14 @@ const loginUser = async (req, res) => {
 
 const logoutUser = async (req, res) => {
     try {
+        // Clear JWT cookies to invalidate session on client side
         clearAuthCookies(res);
-        res.status(200).json({ message: 'Logout successful' });
+        return res.status(200).json({ message: 'Logout successful' });
     } catch (err) {
         console.error('Logout error:', err);
-        res.status(500).json({ error: 'An error occurred during logout' });
+        return res
+            .status(500)
+            .json({ error: 'An error occurred during logout' });
     }
 };
 
@@ -169,49 +169,50 @@ const refreshAccessToken = async (req, res) => {
             return res.status(401).json({ msg: 'Refresh token not found' });
         }
 
-        // Verify refresh token
+        // Verify refresh token integrity + decode payload
         const decoded = jwt.verify(
             refreshToken,
             process.env.JWT_REFRESH_SECRET
         );
 
-        // Get user from database
+        // Ensure user from token still exists (could be deleted/banned)
         const user = await getUserById(decoded.userId);
         if (!user) {
             return res.status(401).json({ msg: 'User not found' });
         }
 
-        // Create the access token (short-lived)
+        // Issue new short-lived access token and set it in cookie
         const accessToken = await createAccessToken(user);
-        // Store token in httpOnly cookies
         res.cookie('accessToken', accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
-            maxAge: 3600000, // 1 hour
+            maxAge: 3600000,
             sameSite: 'Strict',
             path: '/',
         });
 
-        res.status(200).json({ msg: 'Token refreshed successfully' });
+        return res.status(200).json({ msg: 'Token refreshed successfully' });
     } catch (err) {
         console.error('Token refresh error:', err);
-        res.status(401).json({ msg: 'Invalid or expired refresh token' });
+        return res
+            .status(401)
+            .json({ msg: 'Invalid or expired refresh token' });
     }
 };
 
 const forgotPassword = async (req, res) => {
     const { email: rawEmail, phoneNumber: rawPhone } = req.body;
-
     const email = rawEmail?.trim().toLowerCase();
     const phoneNumber = rawPhone?.trim();
 
     if (!email && !phoneNumber) {
-        return res
-            .status(400)
-            .json({ msg: 'You must provide either an email or phone number' });
+        return res.status(400).json({
+            msg: 'You must provide either an email or phone number',
+        });
     }
 
     try {
+        // Try to find the user by email or phone, but don't reveal if not found
         const user = email
             ? await getUserByEmailDB(email)
             : await getUserByPhoneNumberDB(phoneNumber);
@@ -223,17 +224,13 @@ const forgotPassword = async (req, res) => {
         }
 
         const { plainToken, tokenHash } = createToken();
-
         await addToken(user.id, tokenHash);
 
-        const resetLink =
-            process.env.RESET_PASSWORD_URL_FRONT +
-            '/reset-password?token=' +
-            plainToken;
+        const resetLink = `${process.env.RESET_PASSWORD_URL_FRONT}/reset-password?token=${plainToken}`;
         const MAIL_ROUTE = `${process.env.MAIL_SERVICE_URL_BACK}/send-reset-link`;
 
-        // need to return link to email/phone number with token
         if (email) {
+            // Try sending the email; if fails, escalate as 500
             const response = await sendToMail(
                 email,
                 resetLink,
@@ -247,17 +244,17 @@ const forgotPassword = async (req, res) => {
                 throw new Error('Error getting a response from mail server');
             }
         } else if (phoneNumber) {
-            // will be implemented when will have money, for now no money :(
+            // Placeholder: could integrate SMS service here later
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             msg: 'If an account with that identifier exists, you’ll receive a reset link shortly.',
         });
     } catch (err) {
         console.error('/forgot-password error:', err);
-        return res
-            .status(500)
-            .json({ msg: 'Unexpected auth/mail server error' });
+        return res.status(500).json({
+            msg: 'Unexpected auth/mail server error',
+        });
     }
 };
 
@@ -265,7 +262,7 @@ const resetPassword = async (req, res) => {
     let { token, newPassword, confirmPassword } = req.body;
 
     if (!token) {
-        console.error('No valid token for password resetting is provided');
+        console.error('Missing token in password reset request');
         return res
             .status(400)
             .json({ msg: 'No valid verification token provided' });
@@ -275,10 +272,11 @@ const resetPassword = async (req, res) => {
     confirmPassword = confirmPassword.trim();
 
     if (newPassword !== confirmPassword) {
-        console.error('Passwords do not match');
+        console.error('Passwords do not match in reset attempt');
         return res.status(400).json({ msg: 'Passwords do not match' });
     }
 
+    // Hash token for DB lookup
     const tokenHash = createHash('sha256').update(token).digest('hex');
 
     let tokenRecord;
@@ -287,6 +285,8 @@ const resetPassword = async (req, res) => {
 
     try {
         tokenRecord = await getByVerificationToken(tokenHash);
+
+        // Unified check for non-existent, already used, or expired token
         if (!tokenRecord || tokenRecord.isUsed || tokenRecord.expiresAt < now) {
             console.warn(
                 `Invalid password reset attempt for token: ${tokenHash}`,
@@ -308,20 +308,22 @@ const resetPassword = async (req, res) => {
         return res.status(500).json({ msg: 'Internal server error' });
     }
 
+    // Mark token as used to prevent reuse
     await updateVerificationToken(tokenRecord.id);
 
     try {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         const updatedUser = await updatePassword(userId, hashedPassword);
+
         return res.status(200).json({
             msg: 'Password updated successfully',
             userId: updatedUser.id,
         });
     } catch (err) {
         console.error('Error updating password:', err);
-        return res
-            .status(500)
-            .json({ msg: 'Could not update password. Try again later.' });
+        return res.status(500).json({
+            msg: 'Could not update password. Try again later.',
+        });
     }
 };
 

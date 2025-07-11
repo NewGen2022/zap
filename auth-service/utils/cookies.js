@@ -1,30 +1,39 @@
 /**
  * setAuthCookies
  *
- * Sets the authentication cookies on the response.
+ * WHY:
+ *   Sets secure HTTP-only cookies for JWT tokens, preventing JavaScript access
+ *   and ensuring tokens are only sent over secure channels in production.
+ *
+ * DESIGN NOTES:
+ *   - `accessToken` always set, short-lived, for most API requests.
+ *   - `refreshToken` is optional, longer-lived, only sent on specific endpoint (`/api/refresh`).
+ *
+ * SECURITY:
+ *   - `httpOnly` ensures cookies are not accessible to JavaScript (protects against XSS).
+ *   - `secure` ensures cookies only sent over HTTPS in production.
+ *   - `sameSite: Strict` mitigates CSRF by blocking cross-origin sending.
  *
  * @param {object} res - Express response object.
- * @param {string} accessToken - The JWT access token.
- * @param {string} [refreshToken] - (Optional) The JWT refresh token.
+ * @param {string} accessToken - Short-lived access JWT.
+ * @param {string} [refreshToken] - Optional long-lived refresh JWT.
  */
 const setAuthCookies = (res, accessToken, refreshToken) => {
-    // Set access token cookie (always set)
     res.cookie('accessToken', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'prod', // Ensure cookies are only sent over HTTPS in production
-        maxAge: 3600000, // 1 hour in milliseconds
+        secure: process.env.NODE_ENV === 'prod',
+        maxAge: 3600000, // 1 hour
         sameSite: 'Strict',
         path: '/',
     });
 
-    // Set refresh token cookie if provided
     if (refreshToken) {
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'prod',
-            maxAge: 259200000, // 3 days in milliseconds
+            maxAge: 259200000, // 3 days
             sameSite: 'Strict',
-            path: '/api/refresh', // Only send refresh token with requests to /api/refresh
+            path: '/api/refresh', // Limits CSRF surface by scoping
         });
     }
 };
@@ -32,14 +41,16 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
 /**
  * clearAuthCookies
  *
- * Clears the access token cookie and, optionally, the refresh token cookie from the response.
+ * WHY:
+ *   Explicitly clears authentication cookies on logout or when invalidating a session.
+ *   Clears both access and refresh tokens to fully sign out user.
  *
- * @param {object} res - The Express response object.
- * @param {boolean} [clearRefresh=true] - If true, clear both access and refresh tokens.
- *                                          If false, only the access token will be cleared.
+ * SECURITY:
+ *   Uses same options as when setting cookies to ensure proper deletion.
+ *
+ * @param {object} res - Express response object.
  */
 const clearAuthCookies = (res) => {
-    // Clear the access token cookie
     res.clearCookie('accessToken', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'prod',
@@ -47,7 +58,6 @@ const clearAuthCookies = (res) => {
         path: '/',
     });
 
-    // Clear the refresh token cookie, if desired
     res.clearCookie('refreshToken', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'prod',

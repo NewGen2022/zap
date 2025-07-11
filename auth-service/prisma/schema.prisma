@@ -15,17 +15,31 @@ model User {
   password    String
   role        UserRole @default(USER)
 
+  // Soft verification flags for both email & phone
   isEmailVerified Boolean @default(false)
   isPhoneVerified Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // One-to-many relationship with tokens (could be for verification or resets)
   credentialVerifications VerificationToken[]
 }
 
-// model to store tokens that used for email/phone verification, 
-// and for password resetting
+/**
+ * Stores hashed tokens for:
+ * - email verification
+ * - phone verification
+ * - password reset
+ * WHY HASHED:
+ * Hashing the token ensures that if DB leaks, raw tokens can't be used.
+ * (like bcrypt but here SHA-256 usually enough for non-password short-lived tokens).
+ * isUsed:
+ * Ensures tokens are one-time-use. Even if someone steals the raw value
+ * after it’s used, it will be rejected.
+ * expiresAt:
+ * Lets you do automatic expiry checks or lazy deletions later.
+ */
 model VerificationToken {
   id        String           @id @default(uuid())
   userId    String
@@ -37,13 +51,18 @@ model VerificationToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Indexes for fast lookups by user or expiry (cleanup jobs, auth flows)
   @@index([userId])
   @@index([expiresAt])
   @@index([type])
 }
 
-// model to store tokens that used 
-
+/**
+ * User roles to support RBAC (role-based access control).
+ * WHY ENUM:
+ * Keeps DB integrity — prevents typos in role assignment
+ * like 'admni' or 'administrator'.
+ */
 enum UserRole {
   USER
   MODERATOR
@@ -52,6 +71,13 @@ enum UserRole {
   CREATOR
 }
 
+/**
+ * Verification types for multi-purpose tokens.
+ * EXAMPLES:
+ * EMAIL         -> email confirmation link
+ * PHONE         -> SMS code (future)
+ * PASSWORD_RESET -> reset links
+ */
 enum VerificationType {
   EMAIL
   PHONE

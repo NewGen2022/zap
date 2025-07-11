@@ -1,45 +1,42 @@
 const requestIp = require('request-ip');
-const loginAttempts = new Map(); // IP -> {count, lastAttempt}
+
+const loginAttempts = new Map(); // Maps IP -> { count, lastAttempt }
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
 
 /**
- * Middleware: checkRateLimit
+ * checkRateLimit
  *
- * Purpose:
- *   Prevent brute-force attacks by limiting the number of login attempts from a single IP.
+ * WHY:
+ *   Protects login endpoints from brute-force attacks by rate limiting based on IP.
  *
- * Description:
- *   This middleware checks whether the number of login attempts coming from the client's IP
- *   has exceeded a defined threshold (MAX_LOGIN_ATTEMPTS) within a given period (LOCKOUT_TIME).
- *   If the client exceeds the limit, the middleware responds with a 429 status code and an error message.
- *   Otherwise, it increments the attempt counter and allows the request to proceed.
+ * DESCRIPTION:
+ *   Tracks failed login attempts in-memory by IP address. If an IP exceeds
+ *   MAX_LOGIN_ATTEMPTS within LOCKOUT_TIME, blocks further attempts
+ *   until lockout period expires.
  *
- * Parameters:
- *   @param {object} req - Express request object. Expects to contain the client's IP.
- *   @param {object} res - Express response object.
- *   @param {function} next - Express next middleware function.
+ * SECURITY NOTE:
+ *   This is in-memory; resets on server restart. For distributed systems,
+ *   you'd move this to Redis or similar.
  *
- * Side Effects:
- *   - The middleware updates an in-memory Map (loginAttempts) to track the number of attempts
- *     and the timestamp of the last attempt.
- *   - On exceeding the limit, it sends a response and does not call next().
+ * SIDE EFFECT:
+ *   Updates internal `loginAttempts` map for tracking.
  *
- * Usage:
- *   app.post('/login', checkRateLimit, loginUser);
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {function} next - Calls next middleware if under limit
  */
 const checkRateLimit = (req, res, next) => {
-    // Get client IP
     const clientIp = requestIp.getClientIp(req);
     const now = Date.now();
 
-    // Get attempts for current IP
+    // Get current record or initialize
     const attempts = loginAttempts.get(clientIp) || {
         count: 0,
         lastAttempt: now,
     };
 
-    // Reset counter
+    // Reset counter if lockout expired
     if (
         attempts.count >= MAX_LOGIN_ATTEMPTS &&
         now - attempts.lastAttempt > LOCKOUT_TIME
@@ -48,9 +45,8 @@ const checkRateLimit = (req, res, next) => {
         return next();
     }
 
-    // Check if too many attempts
+    // If too many attempts and still in lockout period, block request
     if (attempts.count >= MAX_LOGIN_ATTEMPTS) {
-        // Calculate time remaining in lockout
         const remainingTime = Math.ceil(
             (LOCKOUT_TIME - (now - attempts.lastAttempt)) / 60000
         );
@@ -60,7 +56,7 @@ const checkRateLimit = (req, res, next) => {
         });
     }
 
-    // Update attempts counter
+    // Otherwise increment attempt count
     loginAttempts.set(clientIp, {
         count: attempts.count + 1,
         lastAttempt: now,
@@ -72,19 +68,14 @@ const checkRateLimit = (req, res, next) => {
 /**
  * resetLoginAttempts
  *
- * Purpose:
- *   Resets the login attempt counter for a given IP address.
+ * WHY:
+ *   Clears failed login attempts for an IP after successful authentication,
+ *   so legit users aren't stuck waiting out lockouts.
  *
- * Description:
- *   This function deletes the entry for the specified IP address from the
- *   in-memory loginAttempts Map. This is typically called upon a successful
- *   login to clear any previous failed login attempts associated with that IP.
+ * SIDE EFFECT:
+ *   Removes IP entry from the internal attempts map.
  *
- * Parameters:
- *   @param {string} ip - The IP address whose login attempts should be cleared.
- *
- * Returns:
- *   Nothing; it simply removes the record.
+ * @param {string} ip - IP address to clear attempts for
  */
 const resetLoginAttempts = (ip) => {
     loginAttempts.delete(ip);

@@ -2,7 +2,13 @@ const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const { isValidPhoneNumber } = require('libphonenumber-js');
 
-// Email and password validation rules
+/**
+ * Validation rules for user registration.
+ *
+ * WHY: Ensures incoming registration data is robust and secure before reaching
+ * database or hashing logic. Prevents common injection, weak passwords,
+ * and ensures at least one contact method is present.
+ */
 const validateUserInput = [
     body('username')
         .notEmpty()
@@ -51,6 +57,7 @@ const validateUserInput = [
             return true;
         }),
 
+    // Ensure at least one contact method is provided (email or phone)
     body().custom((_, { req }) => {
         if (!req.body.email && !req.body.phoneNumber) {
             throw new Error('At least email or phone number is required');
@@ -59,7 +66,12 @@ const validateUserInput = [
     }),
 ];
 
-// Login validation
+/**
+ * Validation rules for login.
+ *
+ * WHY: Keeps login flows simple but still checks for non-empty fields.
+ * Supports login by username/email/phone.
+ */
 const validateLoginInput = [
     body('loginData')
         .notEmpty()
@@ -71,48 +83,33 @@ const validateLoginInput = [
 /**
  * handleValidationErrors
  *
- * Purpose:
- *   Checks for validation errors in the request. If any errors are present,
- *   it sends a 400 response with an array of error messages.
+ * WHY: Ensures that if any express-validator checks fail,
+ * we stop the request early and respond with a 400, avoiding
+ * hitting DB or business logic with invalid data.
  *
- * Description:
- *   This middleware uses express-validator's `validationResult` to gather errors
- *   from the request object. If errors exist, it maps them to an array of messages
- *   and returns an HTTP 400 response with the error details. If no errors are found,
- *   it calls `next()` to pass control to the next middleware in the chain.
- *
- * Parameters:
- *   @param {object} req - Express request object, which should contain the result of previous validations.
- *   @param {object} res - Express response object.
- *   @param {function} next - Callback to pass control to the next middleware.
- *
- * Returns:
- *   If validation errors are present, sends a JSON response with status 400.
- *   Otherwise, calls `next()` to continue processing the request.
+ * SIDE EFFECT: Returns immediately with JSON list of errors if invalid.
  */
 const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         const errorMsgs = errors.array().map((err) => err.msg);
-
         return res.status(400).json({ errors: errorMsgs });
     }
     next();
 };
 
 /**
- * Middleware that verifies authentication by validating a JWT from either the
- * Authorization header (Bearer token) or from an httpOnly cookie.
+ * requireAuth
  *
- * @param {object} req - Express request object.
- * @param {object} res - Express response object.
- * @param {function} next - Function to pass control to the next middleware.
+ * WHY: Enforces authentication by requiring a valid JWT
+ * either from an Authorization header (Bearer token) or
+ * from an httpOnly cookie.
  *
- * @returns {object|undefined} Returns a 401 error if no valid token is provided, otherwise calls next().
+ * SECURITY: Protects downstream handlers from unauthenticated access.
  */
 const requireAuth = (req, res, next) => {
-    // Get token from Authorization header or cookie
     let token;
+    // Try to pull JWT from Authorization header or from cookies
     if (
         req.headers.authorization &&
         req.headers.authorization.startsWith('Bearer')
@@ -122,7 +119,6 @@ const requireAuth = (req, res, next) => {
         token = req.cookies.accessToken;
     }
 
-    // If no token, unauthorized
     if (!token) {
         return res
             .status(401)
@@ -131,8 +127,7 @@ const requireAuth = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-
-        req.user = decoded;
+        req.user = decoded; // Attach decoded payload (e.g. { id, role })
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Unauthorized: Invalid token' });
@@ -140,20 +135,21 @@ const requireAuth = (req, res, next) => {
 };
 
 /**
- * Middleware factory that returns a middleware function to restrict access based on user roles.
+ * requireRole
  *
- * @param {Array<string>} allowedRoles - An array of roles allowed to access the route.
- * @returns {function} Middleware function that checks the authenticated user's role.
+ * WHY: Enforces role-based access control (RBAC) on routes.
+ * Only users with roles listed in `allowedRoles` can proceed.
  *
- * @example
- * // Use the middleware in a route:
- * router.post('/protected-admin', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), adminHandler);
+ * USAGE:
+ *   router.post('/admin-only', requireAuth, requireRole(['ADMIN']), handler);
  */
 const requireRole = (allowedRoles) => (req, res, next) => {
+    // If no roles configured, allow by default (open access)
     if (!allowedRoles || !Array.isArray(allowedRoles)) {
-        // If no allowed roles defined, proceed without restriction
         return next();
     }
+
+    // Reject if user's role isn't among allowed roles
     if (!allowedRoles.includes(req.user.role)) {
         return res
             .status(403)

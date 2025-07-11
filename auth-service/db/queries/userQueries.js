@@ -1,5 +1,14 @@
 const prismaClient = require('../prismaClient');
 
+/**
+ * Inserts a new user into the database.
+ *
+ * WHY: Used for user registration. Ensures username & password provided.
+ * SIDE EFFECTS: Persists a new user row.
+ *
+ * GUARANTEES:
+ *   - Converts absent email/phoneNumber to `null` so DB stays consistent.
+ */
 const createUser = async (username, email, phoneNumber, password) => {
     if (!username) throw new Error('No username provided');
     if (!password) throw new Error('No password provided');
@@ -25,6 +34,12 @@ const createUser = async (username, email, phoneNumber, password) => {
     }
 };
 
+/**
+ * Finds a user by username.
+ *
+ * WHY: Used for login or uniqueness checks.
+ * SECURITY: Always fetches hashed password for login verification.
+ */
 const getUserByUsernameDB = async (username) => {
     if (!username) throw new Error('No username provided');
 
@@ -46,11 +61,19 @@ const getUserByUsernameDB = async (username) => {
     }
 };
 
+/**
+ * Finds a user by email, validating format first.
+ *
+ * WHY: Used for login, registration checks, password reset flows.
+ *
+ * EDGE CASE:
+ *   - If email fails regex, short-circuits and returns null
+ *     instead of doing unnecessary DB call.
+ */
 const getUserByEmailDB = async (email) => {
     if (!email) throw new Error('No email provided');
 
     const isEmail = /\S+@\S+\.\S+/.test(email);
-
     if (!isEmail) return null;
 
     try {
@@ -71,6 +94,11 @@ const getUserByEmailDB = async (email) => {
     }
 };
 
+/**
+ * Finds a user by phone number.
+ *
+ * WHY: Used for login or uniqueness checks, especially when supporting phone auth.
+ */
 const getUserByPhoneNumberDB = async (phoneNumber) => {
     if (!phoneNumber) throw new Error('No phone number provided');
 
@@ -91,6 +119,11 @@ const getUserByPhoneNumberDB = async (phoneNumber) => {
     }
 };
 
+/**
+ * Looks up a user by their unique DB ID.
+ *
+ * WHY: Used for JWT refresh checks or user settings retrieval.
+ */
 const getUserById = async (userId) => {
     if (!userId) throw new Error('No "user id" is provided');
 
@@ -108,6 +141,14 @@ const getUserById = async (userId) => {
     }
 };
 
+/**
+ * Updates a user's password to a new hashed value.
+ *
+ * WHY: Used by password reset flows.
+ *
+ * SIDE EFFECTS:
+ *   - Persists the new hash, overwriting old password.
+ */
 const updatePassword = async (userId, newPassword) => {
     if (!userId) throw new Error('No user id is provided');
     if (!newPassword) throw new Error('No new password is provided');
