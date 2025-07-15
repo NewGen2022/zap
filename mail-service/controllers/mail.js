@@ -91,4 +91,96 @@ The Support Team`;
     }
 };
 
-module.exports = { sendResetPasswordLink };
+/**
+ * sendEmailVerificationLink
+ *
+ * WHAT:
+ *   Handles HTTP request to send an email verification link to the user.
+ *
+ * WHY:
+ *   Keeps email message generation separate from SMTP sending logic.
+ *   Makes it easy to reuse / swap transport (Mailgun, SES, etc).
+ *
+ * SECURITY / PRIVACY:
+ *   - Message is generic, does not expose sensitive data.
+ *   - Encourages ignoring if not requested to reduce phishing confusion.
+ *
+ * SIDE EFFECTS:
+ *   - Sends an email via SMTP (sendEmailMsg).
+ *   - Logs server-side errors but responds generically to client.
+ *
+ * DESIGN:
+ *   - Currently only handles 'email'; structured to allow adding SMS later.
+ *
+ * @param {object} req - Express request, expects body with { to, link, via }
+ * @param {object} res - Express response
+ */
+const sendEmailVerificationLink = async (req, res) => {
+    const { to, link, via } = req.body;
+
+    if (via === 'email') {
+        const subject = '✅ Verify Your Email Address';
+
+        const text = `Hello,
+
+Thank you for creating an account with us. Please verify your email address by clicking the link below:
+
+${link}
+
+If you did not sign up, please ignore this message.
+
+Thank you,
+The Support Team`;
+
+        const html = `
+            <div style="
+                background-color: #f9f9f9;
+                padding: 40px;
+                font-family: 'Jost', sans-serif, Arial;
+                color: #333;
+                line-height: 1.8;
+                font-size: 18px;
+            ">
+                <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <img src="https://yourdomain.com/logo.png" alt="Your Brand Logo" style="height: 50px;">
+                    </div>
+                    <p>Hello,</p>
+                    <p>Thank you for creating an account. Please confirm your email address by clicking the button below:</p>
+                    <p style="text-align: center; margin: 30px;">
+                        <a href="${link}" style="
+                            background-color: #007BFF;
+                            color: white;
+                            padding: 10px 25px;
+                            text-decoration: none;
+                            border-radius: 5px;
+                            display: inline-block;
+                            font-size: 18px;
+                        ">
+                            Verify My Email
+                        </a>
+                    </p>
+                    <p>If you did not create this account, please ignore this email.</p>
+                    <p style="margin-top: 40px;">Thank you,<br/>The Support Team</p>
+                </div>
+            </div>
+        `;
+
+        try {
+            await sendEmailMsg(to, subject, text, html);
+            return res
+                .status(200)
+                .json({ msg: 'Verification email sent successfully' });
+        } catch (err) {
+            console.error('Error sending verification email:', err);
+            return res.status(500).json({
+                msg: 'Failed to send verification email',
+                error: err.message,
+            });
+        }
+    } else if (via === 'phone') {
+        // TODO: implement SMS verification message in the future
+    }
+};
+
+module.exports = { sendResetPasswordLink, sendEmailVerificationLink };

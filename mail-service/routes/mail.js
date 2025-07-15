@@ -1,5 +1,8 @@
 const express = require('express');
-const { sendResetPasswordLink } = require('../controllers/mail');
+const {
+    sendResetPasswordLink,
+    sendEmailVerificationLink,
+} = require('../controllers/mail');
 
 const router = express.Router();
 
@@ -17,5 +20,19 @@ const router = express.Router();
  *   - Responds generically regardless of whether the user exists to prevent data leaks or enumeration.
  */
 router.post('/send-reset-link', sendResetPasswordLink);
+
+/**
+ * POST /send-verification-link
+ *
+ * WHAT:
+ *   - Endpoint to trigger sending an account verification email to confirm ownership.
+ *
+ * WHY:
+ *   - Keeps email-specific API routes separate from core authentication or user logic.
+ *
+ * SECURITY:
+ *   - Responds generically to avoid leaking whether an email is registered.
+ */
+router.post('/send-verification-link', sendEmailVerificationLink);
 
 module.exports = router;
