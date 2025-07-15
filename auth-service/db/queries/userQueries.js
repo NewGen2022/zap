@@ -22,6 +22,7 @@ const createUser = async (username, email, phoneNumber, password) => {
                 password,
             },
             select: {
+                id: true,
                 username: true,
                 email: true,
                 phoneNumber: true,
@@ -144,30 +145,70 @@ const getUserById = async (userId) => {
 /**
  * Updates a user's password to a new hashed value.
  *
- * WHY: Used by password reset flows.
+ * WHAT:
+ *   Persists a new password hash to the database for the given user.
+ *
+ * WHY:
+ *   Used by password reset flows to update credentials securely.
  *
  * SIDE EFFECTS:
- *   - Persists the new hash, overwriting old password.
+ *   Overwrites the old password hash with the new one in the DB.
  */
 const updatePassword = async (userId, newPassword) => {
     if (!userId) throw new Error('No user id is provided');
     if (!newPassword) throw new Error('No new password is provided');
 
     try {
+        // Run update query on user record, selecting minimal data to confirm success
         const userInfo = await prismaClient.user.update({
             where: { id: userId },
             data: {
-                password: newPassword,
+                password: newPassword, // new bcrypt hash stored
             },
             select: {
-                id: true,
-                password: true,
+                id: true, // return ID to verify operation
             },
         });
 
         return userInfo;
     } catch (err) {
         throw new Error("Error while updating user's password: " + err.message);
+    }
+};
+
+/**
+ * Marks a user's email as verified in the database.
+ *
+ * WHAT:
+ *   Sets the isEmailVerified flag to true for a user.
+ *
+ * WHY:
+ *   Used after email confirmation to activate the account.
+ *
+ * SIDE EFFECTS:
+ *   Updates the user record; changes verification state.
+ */
+const updateEmailVerification = async (userId) => {
+    if (!userId) throw new Error('No user id is provided');
+
+    try {
+        // Update flag in DB to mark user as verified
+        const userInfo = await prismaClient.user.update({
+            where: { id: userId },
+            data: {
+                isEmailVerified: true,
+            },
+            select: {
+                id: true,
+                isEmailVerified: true,
+            },
+        });
+
+        return userInfo;
+    } catch (err) {
+        throw new Error(
+            "Error while updating user's email verification: " + err.message
+        );
     }
 };
 
@@ -178,4 +219,5 @@ module.exports = {
     getUserByPhoneNumberDB,
     getUserById,
     updatePassword,
+    updateEmailVerification,
 };
