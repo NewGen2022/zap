@@ -1,8 +1,12 @@
 const express = require('express');
 const {
     sendResetPasswordLink,
-    sendEmailVerificationLink,
+    sendVerificationLink,
 } = require('../controllers/mail');
+const {
+    validateSendMailInput,
+    handleValidationErrors,
+} = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -19,7 +23,12 @@ const router = express.Router();
  * SECURITY:
  *   - Responds generically regardless of whether the user exists to prevent data leaks or enumeration.
  */
-router.post('/send-reset-link', sendResetPasswordLink);
+router.post(
+    '/send-reset-link',
+    validateSendMailInput,
+    handleValidationErrors,
+    sendResetPasswordLink
+);
 
 /**
  * POST /send-verification-link
@@ -33,6 +42,11 @@ router.post('/send-reset-link', sendResetPasswordLink);
  * SECURITY:
  *   - Responds generically to avoid leaking whether an email is registered.
  */
-router.post('/send-verification-link', sendEmailVerificationLink);
+router.post(
+    '/send-verification-link',
+    validateSendMailInput,
+    handleValidationErrors,
+    sendVerificationLink
+);
 
 module.exports = router;
