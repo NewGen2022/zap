@@ -13,7 +13,7 @@ const prismaClient = require('../prismaClient');
  * GUARANTEES:
  *   - Throws if userId or hash is missing to avoid silent errors.
  */
-const addToken = async (userId, hash) => {
+const addToken = async (userId, hash, tokenType = 'EMAIL') => {
     if (!userId) throw new Error('No user id is provided');
     if (!hash) throw new Error('No token hash is provided');
 
@@ -22,7 +22,7 @@ const addToken = async (userId, hash) => {
             data: {
                 userId: userId,
                 tokenHash: hash,
-                type: 'PASSWORD_RESET',
+                type: tokenType,
                 expiresAt: new Date(Date.now() + 3600000), // 1 hour
             },
         });
@@ -46,7 +46,7 @@ const getByVerificationToken = async (tokenHash) => {
     if (!tokenHash) throw new Error('No token is provided to get by');
 
     try {
-        const userId = await prismaClient.verificationToken.findUnique({
+        const tokenInfo = await prismaClient.verificationToken.findUnique({
             where: {
                 tokenHash,
             },
@@ -55,10 +55,11 @@ const getByVerificationToken = async (tokenHash) => {
                 userId: true,
                 expiresAt: true,
                 isUsed: true,
+                type: true,
             },
         });
 
-        return userId;
+        return tokenInfo;
     } catch (err) {
         throw new Error(
             `Error while getting by verification token: ${err.message}`
