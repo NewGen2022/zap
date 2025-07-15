@@ -49,7 +49,7 @@ The Support Team`;
                 font-family: 'Jost', sans-serif, Arial;
                 color: #333;
                 line-height: 1.8;
-                font-size: 18px;
+                font-size: 16px;
             ">
                 <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px;">
                     <div style="text-align: center; margin-bottom: 30px;">
@@ -65,7 +65,7 @@ The Support Team`;
                             text-decoration: none;
                             border-radius: 5px;
                             display: inline-block;
-                            font-size: 18px;
+                            font-size: 16px;
                         ">
                             Reset My Password
                         </a>
@@ -92,10 +92,10 @@ The Support Team`;
 };
 
 /**
- * sendEmailVerificationLink
+ * sendVerificationLink
  *
  * WHAT:
- *   Handles HTTP request to send an email verification link to the user.
+ *   Handles HTTP request to send an email/phone verification link to the user.
  *
  * WHY:
  *   Keeps email message generation separate from SMTP sending logic.
@@ -115,7 +115,7 @@ The Support Team`;
  * @param {object} req - Express request, expects body with { to, link, via }
  * @param {object} res - Express response
  */
-const sendEmailVerificationLink = async (req, res) => {
+const sendVerificationLink = async (req, res) => {
     const { to, link, via } = req.body;
 
     if (via === 'email') {
@@ -123,7 +123,7 @@ const sendEmailVerificationLink = async (req, res) => {
 
         const text = `Hello,
 
-Thank you for creating an account with us. Please verify your email address by clicking the link below:
+Thank you for joining us. Please verify your email address by clicking the link below:
 
 ${link}
 
@@ -139,14 +139,14 @@ The Support Team`;
                 font-family: 'Jost', sans-serif, Arial;
                 color: #333;
                 line-height: 1.8;
-                font-size: 18px;
+                font-size: 16px;
             ">
                 <div style="max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px;">
                     <div style="text-align: center; margin-bottom: 30px;">
                         <img src="https://yourdomain.com/logo.png" alt="Your Brand Logo" style="height: 50px;">
                     </div>
                     <p>Hello,</p>
-                    <p>Thank you for creating an account. Please confirm your email address by clicking the button below:</p>
+                    <p>Thank you for joining account. Please confirm your email address by clicking the button below:</p>
                     <p style="text-align: center; margin: 30px;">
                         <a href="${link}" style="
                             background-color: #007BFF;
@@ -155,7 +155,7 @@ The Support Team`;
                             text-decoration: none;
                             border-radius: 5px;
                             display: inline-block;
-                            font-size: 18px;
+                            font-size: 16px;
                         ">
                             Verify My Email
                         </a>
@@ -183,4 +183,4 @@ The Support Team`;
     }
 };
 
-module.exports = { sendResetPasswordLink, sendEmailVerificationLink };
+module.exports = { sendResetPasswordLink, sendVerificationLink };
