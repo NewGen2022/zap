@@ -57,7 +57,7 @@ const forgotPassword = async (req, res) => {
 
         // Create reset token & store hashed version
         const { plainToken, tokenHash } = createToken();
-        await addToken(user.id, tokenHash, (tokenType = 'PASSWORD_RESET'));
+        await addToken(user.id, tokenHash, 'PASSWORD_RESET');
 
         if (email) {
             const resetLink = `${process.env.RESET_PASSWORD_URL_FRONT}/reset-password?token=${plainToken}`;

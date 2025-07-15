@@ -92,7 +92,7 @@ const registerUser = async (req, res) => {
         const { password: _, ...userResponse } = newUser;
 
         // Store the verification token in DB for later confirmation
-        await addToken(userResponse.id, tokenHash, (tokenType = 'EMAIL'));
+        await addToken(userResponse.id, tokenHash, 'EMAIL');
 
         // If user signed up with email, send verification link
         if (email) {
@@ -270,12 +270,13 @@ const verifyAccount = async (req, res) => {
 
     let tokenRecord;
     let userId;
+    const now = new Date();
 
     try {
         tokenRecord = await getByVerificationToken(tokenHash);
 
         // Check if token exists and hasn't been used already
-        if (!tokenRecord || tokenRecord.isUsed) {
+        if (!tokenRecord || tokenRecord.isUsed || tokenRecord.expiresAt < now) {
             console.warn(
                 `Invalid account verification attempt for token: ${tokenHash}`,
                 {
