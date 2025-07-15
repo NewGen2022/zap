@@ -9,7 +9,7 @@ const checkDatabaseConnection = async () => {
         await prismaClient.$connect();
         console.log('Successfully connected to the database');
     } catch (err) {
-        console.error('Error connecting to the database:', error);
+        console.error('Error connecting to the database:', err);
         process.exit(1);
     }
 };
@@ -22,8 +22,8 @@ process.on('SIGINT', async () => {
         // Disconnect from the database
         await prismaClient.$disconnect();
         console.log('Prisma Client disconnected due to SIGINT');
-    } catch (error) {
-        console.error('Error disconnecting Prisma Client:', error);
+    } catch (err) {
+        console.error('Error disconnecting Prisma Client:', err);
     } finally {
         process.exit(0); // Exit the process with success status
     }
@@ -35,8 +35,8 @@ process.on('SIGTERM', async () => {
         // Disconnect from the database
         await prismaClient.$disconnect();
         console.log('Prisma Client disconnected due to SIGTERM');
-    } catch (error) {
-        console.error('Error disconnecting Prisma Client:', error);
+    } catch (err) {
+        console.error('Error disconnecting Prisma Client:', err);
     } finally {
         process.exit(0); // Exit the process with success status
     }
