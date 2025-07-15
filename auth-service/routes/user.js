@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 
-const { registerUser, loginUser, logoutUser } = require('../controllers/user');
+const {
+    registerUser,
+    loginUser,
+    logoutUser,
+    verifyAccount,
+} = require('../controllers/user');
 const {
     validateUserInput,
     handleValidationErrors,
@@ -47,5 +52,17 @@ router.post(
  *   - Invalidates client session by removing JWT cookies. Stateless logout.
  */
 router.post('/logout', logoutUser);
+
+/**
+ * POST /verify-account
+ *
+ * WHAT:
+ *   - Endpoint that completes user account verification by consuming a token.
+ *
+ * WHY:
+ *   - Confirms ownership of email (or phone in future), marks user as verified.
+ *   - Keeps verification logic separate from password resets and login flows.
+ */
+router.post('/verify-account', verifyAccount);
 
 module.exports = router;
