@@ -1,5 +1,6 @@
-const { sendEmailMsg } = require('../utils/mail');
 require('dotenv').config();
+const { sendEmailMsg } = require('../utils/mail');
+const logger = require('../utils/logger');
 
 /**
  * sendResetPasswordLink
@@ -80,7 +81,14 @@ The Support Team`;
             await sendEmailMsg(to, subject, text, html);
             return res.status(200).json({ msg: 'Message sent successfully' });
         } catch (err) {
-            console.error('Error sending message via email:', err);
+            logger.error('[mail-service] Error sending message via email:', {
+                service: 'mail-service',
+                action: 'send-reset-link',
+                to,
+                error: err.message,
+                stack: err.stack,
+            });
+
             return res.status(500).json({
                 msg: 'Failed to send reset email',
                 error: err.message,
@@ -172,7 +180,13 @@ The Support Team`;
                 .status(200)
                 .json({ msg: 'Verification email sent successfully' });
         } catch (err) {
-            console.error('Error sending verification email:', err);
+            logger.error('[mail-service] Error sending verification email:', {
+                service: 'mail-service',
+                action: 'send-verification-link',
+                to,
+                error: err.message,
+                stack: err.stack,
+            });
             return res.status(500).json({
                 msg: 'Failed to send verification email',
                 error: err.message,
