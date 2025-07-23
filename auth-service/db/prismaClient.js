@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const logger = require('../utils/logger');
 
 // Create a single instance of PrismaClient to interact with the database
 const prismaClient = new PrismaClient();
@@ -7,9 +8,13 @@ const checkDatabaseConnection = async () => {
     try {
         // Attempt to connect to the database
         await prismaClient.$connect();
-        console.log('Successfully connected to the database');
+        logger.info('Prisma connected to DB', { action: 'db-connect' });
     } catch (err) {
-        console.error('Error connecting to the database:', err);
+        logger.error('Error connecting to DB', {
+            action: 'db-connect',
+            error: err.message,
+            stack: err.stack,
+        });
         process.exit(1);
     }
 };
@@ -17,30 +22,25 @@ const checkDatabaseConnection = async () => {
 checkDatabaseConnection();
 
 // Gracefully handle application shutdown when receiving SIGINT (Ctrl + C)
-process.on('SIGINT', async () => {
-    try {
-        // Disconnect from the database
-        await prismaClient.$disconnect();
-        console.log('Prisma Client disconnected due to SIGINT');
-    } catch (err) {
-        console.error('Error disconnecting Prisma Client:', err);
-    } finally {
-        process.exit(0); // Exit the process with success status
-    }
-});
-
 // Gracefully handle application shutdown when receiving SIGTERM (Docker, PM2, etc.)
-process.on('SIGTERM', async () => {
+const shutdown = async (signal) => {
     try {
-        // Disconnect from the database
         await prismaClient.$disconnect();
-        console.log('Prisma Client disconnected due to SIGTERM');
+        logger.info('Prisma disconnected', { action: 'db-disconnect', signal });
     } catch (err) {
-        console.error('Error disconnecting Prisma Client:', err);
+        logger.error('Error during Prisma disconnect', {
+            action: 'db-disconnect',
+            signal,
+            error: err.message,
+            stack: err.stack,
+        });
     } finally {
-        process.exit(0); // Exit the process with success status
+        process.exit(0);
     }
-});
+};
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
 
 // Export the PrismaClient instance to use in other parts of the application
 module.exports = prismaClient;
