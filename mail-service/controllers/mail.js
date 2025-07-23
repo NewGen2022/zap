@@ -1,6 +1,5 @@
-require('dotenv').config();
 const { sendEmailMsg } = require('../utils/mail');
-const logger = require('../utils/logger');
+const logAction = require('../utils/logAction');
 
 /**
  * sendResetPasswordLink
@@ -27,6 +26,7 @@ const logger = require('../utils/logger');
  * @param {object} res - Express response object
  */
 const sendResetPasswordLink = async (req, res) => {
+    const start = Date.now();
     const { to, link, via } = req.body;
 
     if (via === 'email') {
@@ -79,14 +79,25 @@ The Support Team`;
 
         try {
             await sendEmailMsg(to, subject, text, html);
-            return res.status(200).json({ msg: 'Message sent successfully' });
-        } catch (err) {
-            logger.error('[mail-service] Error sending message via email:', {
-                service: 'mail-service',
+
+            logAction('info', 'Reset email sent', {
+                req,
                 action: 'send-reset-link',
                 to,
+                status: 200,
+                durationMs: Date.now() - start,
+            });
+
+            return res.status(200).json({ msg: 'Message sent successfully' });
+        } catch (err) {
+            logAction('error', 'Error sending reset email', {
+                req,
+                action: 'send-reset-link',
+                to,
+                status: 500,
                 error: err.message,
                 stack: err.stack,
+                durationMs: Date.now() - start,
             });
 
             return res.status(500).json({
@@ -96,6 +107,15 @@ The Support Team`;
         }
     } else if (via === 'phone') {
         // TODO: implement SMS reset message in the future
+    } else {
+        logAction('warn', 'Unsupported channel for reset', {
+            req,
+            action: 'send-reset-link',
+            to,
+            status: 400,
+            channel: via,
+        });
+        return res.status(400).json({ msg: 'Unsupported channel' });
     }
 };
 
@@ -176,17 +196,29 @@ The Support Team`;
 
         try {
             await sendEmailMsg(to, subject, text, html);
+
+            logAction('info', 'Verification email sent', {
+                req,
+                action: 'send-verification-link',
+                to,
+                status: 200,
+                durationMs: Date.now() - start,
+            });
+
             return res
                 .status(200)
                 .json({ msg: 'Verification email sent successfully' });
         } catch (err) {
-            logger.error('[mail-service] Error sending verification email:', {
-                service: 'mail-service',
+            logAction('error', 'Error sending verification email', {
+                req,
                 action: 'send-verification-link',
                 to,
+                status: 500,
                 error: err.message,
                 stack: err.stack,
+                durationMs: Date.now() - start,
             });
+
             return res.status(500).json({
                 msg: 'Failed to send verification email',
                 error: err.message,
@@ -194,6 +226,15 @@ The Support Team`;
         }
     } else if (via === 'phone') {
         // TODO: implement SMS verification message in the future
+    } else {
+        logAction('warn', 'Unsupported channel for verification', {
+            req,
+            action: 'send-verification-link',
+            to,
+            status: 400,
+            channel: via,
+        });
+        return res.status(400).json({ msg: 'Unsupported channel' });
     }
 };
 
