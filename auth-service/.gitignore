@@ -7,3 +7,5 @@ prisma/migrations/
 todo.md
 
 .vscode/
+
+logs/
