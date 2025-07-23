@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('./logger');
 
 /**
  * sendToMail
@@ -24,15 +25,48 @@ const axios = require('axios');
  *
  * @returns {Promise<object|undefined>} Returns axios response or undefined if request fails.
  */
-const sendToMail = async (to, link, route, email = true) => {
+const sendToMail = async (to, link, route, email = true, ctx = {}) => {
+    const { req, action = 'send-mail' } = ctx;
+    const requestId = req?.requestId;
+
     try {
-        return await axios.post(route, {
+        const response = await axios.post(
+            route,
+            {
+                to,
+                link,
+                via: email ? 'email' : 'phone',
+            },
+            {
+                timeout: 10_000, // на всяк випадок
+            }
+        );
+
+        logger.info('Mail service responded', {
+            action,
+            requestId,
             to,
-            link,
-            via: email ? 'email' : 'phone',
+            route,
+            status: response.status,
         });
+
+        return response;
     } catch (err) {
-        console.error('Error calling mail-service:', err);
+        logger.error('Mail service call failed', {
+            action,
+            requestId,
+            to,
+            route,
+            channel: email ? 'email' : 'phone',
+            error: err.message,
+            code: err.code,
+            status: err.response?.status,
+            data: err.response?.data,
+            stack: err.stack,
+        });
+
+        // Повертаємо undefined, бо так задумано у твоєму коді
+        return undefined;
     }
 };
 
