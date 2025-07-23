@@ -1,4 +1,4 @@
-const prismaClient = require('../prismaClient');
+const { prismaClient } = require('../../clients/prisma');
 
 /**
  * Inserts a new user into the database.

@@ -1,4 +1,4 @@
-const prismaClient = require('../prismaClient');
+const { prismaClient } = require('../../clients/prisma');
 
 /**
  * Creates a new verification token for the given user ID.
