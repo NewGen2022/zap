@@ -20,6 +20,9 @@ const fileJsonFormat = combine(
     json()
 );
 
+const onlyLevel = (lvl) =>
+    format((info) => (info.level === lvl ? info : false))();
+
 const logger = createLogger({
     level: 'info',
     defaultMeta: { service: 'auth-service' },
@@ -41,7 +44,7 @@ const logger = createLogger({
             zippedArchive: true,
             maxSize: '20m',
             maxFiles: '30d',
-            format: fileJsonFormat,
+            format: combine(onlyLevel('info'), fileJsonFormat),
         }),
 
         new DailyRotateFile({
@@ -51,7 +54,7 @@ const logger = createLogger({
             zippedArchive: true,
             maxSize: '20m',
             maxFiles: '30d',
-            format: fileJsonFormat,
+            format: combine(onlyLevel('error'), fileJsonFormat),
         }),
 
         new DailyRotateFile({
