@@ -26,7 +26,6 @@ const onlyLevel = (lvl) =>
 const logger = createLogger({
     level: 'info',
     defaultMeta: { service: 'auth-service' },
-    // базовий формат (для файлів, якщо транспорт без свого format)
     format: fileJsonFormat,
     transports: [
         new transports.Console({
