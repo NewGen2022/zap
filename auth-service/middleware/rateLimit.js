@@ -55,6 +55,8 @@ const AUTH_REDIS_PREFIX = 'auth_srvc:rate_limit:login:';
  * @param {function} next - Calls next middleware if under limit
  */
 const checkRateLimit = async (req, res, next) => {
+    const start = Date.now();
+
     try {
         const clientIp = requestIp.getClientIp(req);
         const clientKey = `${AUTH_REDIS_PREFIX}${clientIp}`;
@@ -109,7 +111,7 @@ const checkRateLimit = async (req, res, next) => {
  *
  * @param {string} clientIp - IP address to clear attempts for
  */
-const resetLoginAttempts = async (clientIp) => {
+const resetLoginAttempts = async (clientIp, req) => {
     try {
         await redisClient.del(`${AUTH_REDIS_PREFIX}${clientIp}`);
 

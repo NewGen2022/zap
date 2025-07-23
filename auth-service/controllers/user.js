@@ -238,7 +238,7 @@ const loginUser = async (req, res) => {
         }
 
         // Successful login -> reset brute-force attempts for this IP
-        await resetLoginAttempts(clientInfo.ip);
+        await resetLoginAttempts(clientInfo.ip, req);
 
         // Security logging of successful login event
         logAction('info', 'Login success', {
