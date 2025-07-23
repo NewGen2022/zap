@@ -23,6 +23,7 @@ const {
     updateVerificationToken,
 } = require('../db/queries/tokenQueries');
 const { createHash } = require('crypto');
+const logAction = require('../utils/logAction');
 
 /**
  * Registers a new user in the system.
@@ -44,33 +45,53 @@ const { createHash } = require('crypto');
  *   - Sends HTTP request to mail service to trigger verification email.
  */
 const registerUser = async (req, res) => {
+    const start = Date.now();
     const { username, password, confirmPassword, email, phoneNumber } =
         req.body;
 
-    // Defensive uniqueness checks to avoid race conditions or duplicate accounts
-    if (email) {
-        const existingEmail = await getUserByEmailDB(email);
-        if (existingEmail) {
-            return res.status(400).json({ msg: 'Email is already taken' });
-        }
-    }
-
-    if (phoneNumber) {
-        const existingPhoneNumber = await getUserByPhoneNumberDB(phoneNumber);
-        if (existingPhoneNumber) {
-            return res.status(400).json({ msg: 'Wrong phone number' });
-        }
-    }
-
-    const existingUser = await getUserByUsernameDB(username);
-    if (existingUser) {
-        return res.status(400).json({ msg: 'Username is already taken' });
-    }
-
-    // Always hash password to secure against plain text storage or DB leaks
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     try {
+        // Defensive uniqueness checks to avoid race conditions or duplicate accounts
+        if (email) {
+            const existingEmail = await getUserByEmailDB(email);
+            if (existingEmail) {
+                logAction('warn', 'Email already taken', {
+                    req,
+                    action: 'register',
+                    email,
+                    status: 400,
+                });
+                return res.status(400).json({ msg: 'Email is already taken' });
+            }
+        }
+
+        if (phoneNumber) {
+            const existingPhoneNumber = await getUserByPhoneNumberDB(
+                phoneNumber
+            );
+            if (existingPhoneNumber) {
+                logAction('warn', 'Phone already taken', {
+                    req,
+                    action: 'register',
+                    phoneNumber,
+                    status: 400,
+                });
+                return res.status(400).json({ msg: 'Wrong phone number' });
+            }
+        }
+
+        const existingUser = await getUserByUsernameDB(username);
+        if (existingUser) {
+            logAction('warn', 'Username already taken', {
+                req,
+                action: 'register',
+                status: 400,
+            });
+            return res.status(400).json({ msg: 'Username is already taken' });
+        }
+
+        // Always hash password to secure against plain text storage or DB leaks
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         let normalizedPhoneNumber;
         if (phoneNumber) {
             // Convert to E.164 format so all numbers in DB are consistent
@@ -104,7 +125,11 @@ const registerUser = async (req, res) => {
                 email,
                 resetLink,
                 MAIL_ROUTE,
-                true
+                true,
+                {
+                    req,
+                    action: 'register-user',
+                }
             );
             // Defensive: handle case where mail service is down
             if (
@@ -117,12 +142,31 @@ const registerUser = async (req, res) => {
             }
         }
 
+        logAction('info', 'User registered', {
+            req,
+            action: 'register',
+            userId: userResponse.id,
+            email,
+            phoneNumber,
+            status: 201,
+            durationMs: Date.now() - start,
+        });
+
         return res.status(201).json({
             message: 'User registered successfully',
             user: userResponse,
         });
     } catch (err) {
-        console.error('Register error:', err);
+        logAction('error', 'Register error', {
+            req,
+            action: 'register',
+            email,
+            phoneNumber,
+            error: err.message,
+            stack: err.stack,
+            status: 500,
+            durationMs: Date.now() - start,
+        });
         return res.status(500).json({
             error: 'Internal Server Error during user registration',
         });
@@ -147,6 +191,8 @@ const registerUser = async (req, res) => {
  *   - Writes secure cookies to client.
  */
 const loginUser = async (req, res) => {
+    const start = Date.now();
+
     try {
         const { loginData, password } = req.body;
 
@@ -169,12 +215,25 @@ const loginUser = async (req, res) => {
         // Always use generic message to avoid revealing if user exists or not
         const invalidCredentialsMsg = 'Invalid credentials. Please try again.';
         if (!user) {
+            logAction('warn', 'Login: user not found / invalid creds', {
+                req,
+                action: 'login',
+                status: 401,
+                ...clientInfo,
+            });
             return res.status(401).json({ msg: invalidCredentialsMsg });
         }
 
         // Verify supplied password against stored bcrypt hash
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
+            logAction('warn', 'Login: wrong password', {
+                req,
+                action: 'login',
+                userId: user.id,
+                status: 401,
+                ...clientInfo,
+            });
             return res.status(401).json({ msg: invalidCredentialsMsg });
         }
 
@@ -182,10 +241,13 @@ const loginUser = async (req, res) => {
         await resetLoginAttempts(clientInfo.ip);
 
         // Security logging of successful login event
-        console.log(`User "${user.username}" logged in successfully`, {
+        logAction('info', 'Login success', {
+            req,
+            action: 'login',
             userId: user.id,
-            userRole: user.role,
-            timestamp: new Date().toISOString(),
+            role: user.role,
+            status: 200,
+            durationMs: Date.now() - start,
             ...clientInfo,
         });
 
@@ -204,7 +266,14 @@ const loginUser = async (req, res) => {
             accessToken,
         });
     } catch (err) {
-        console.error('Login error:', err);
+        logAction('error', 'Login error', {
+            req,
+            action: 'login',
+            error: err.message,
+            stack: err.stack,
+            status: 500,
+            durationMs: Date.now() - start,
+        });
         return res.status(500).json({
             error: 'An error occurred during login',
         });
@@ -228,10 +297,22 @@ const logoutUser = async (req, res) => {
         // Clear JWT cookies to invalidate session on client side
         clearAuthCookies(res);
 
+        logAction('info', 'Logout success', {
+            req,
+            action: 'logout',
+            status: 200,
+        });
+
         // Respond with success to inform client they are logged out
         return res.status(200).json({ message: 'Logout successful' });
     } catch (err) {
-        console.error('Logout error:', err);
+        logAction('error', 'Logout error', {
+            req,
+            action: 'logout',
+            error: err.message,
+            stack: err.stack,
+            status: 500,
+        });
         return res
             .status(500)
             .json({ error: 'An error occurred during logout' });
@@ -256,10 +337,15 @@ const logoutUser = async (req, res) => {
  *   - Updates token record to prevent it being reused.
  */
 const verifyAccount = async (req, res) => {
+    const start = Date.now();
     let { token } = req.body;
 
     if (!token) {
-        console.error('Missing token in account verification request');
+        logAction('warn', 'Missing token in verify request', {
+            req,
+            action: 'verify-account',
+            status: 400,
+        });
         return res
             .status(400)
             .json({ msg: 'No valid verification token provided' });
@@ -277,14 +363,15 @@ const verifyAccount = async (req, res) => {
 
         // Check if token exists and hasn't been used already
         if (!tokenRecord || tokenRecord.isUsed || tokenRecord.expiresAt < now) {
-            console.warn(
-                `Invalid account verification attempt for token: ${tokenHash}`,
-                {
-                    found: !!tokenRecord,
-                    isUsed: tokenRecord?.isUsed,
-                    expiresAt: tokenRecord?.expiresAt,
-                }
-            );
+            logAction('warn', 'Invalid/expired verification token', {
+                req,
+                action: 'verify-account',
+                tokenHash,
+                found: !!tokenRecord,
+                isUsed: tokenRecord?.isUsed,
+                expiresAt: tokenRecord?.expiresAt,
+                status: 400,
+            });
             return res.status(400).json({
                 msg: 'Invalid or expired token. Please request a new verification link.',
             });
@@ -292,7 +379,14 @@ const verifyAccount = async (req, res) => {
 
         userId = tokenRecord.userId;
     } catch (err) {
-        console.error('Error fetching user by token:', err);
+        logAction('error', 'DB error fetching token in verify', {
+            req,
+            action: 'verify-account',
+            tokenHash,
+            error: err.message,
+            stack: err.stack,
+            status: 500,
+        });
         return res.status(500).json({ msg: 'Internal server error' });
     }
 
@@ -309,12 +403,28 @@ const verifyAccount = async (req, res) => {
             // Placeholder for future SMS verification implementation
         }
 
+        logAction('info', 'Account verified', {
+            req,
+            action: 'verify-account',
+            userId,
+            status: 200,
+            durationMs: Date.now() - start,
+        });
+
         return res.status(200).json({
             msg: 'Email was verified successfully',
             userId: updatedUser.id,
         });
     } catch (err) {
-        console.error('Error verifying email:', err);
+        logAction('error', 'Error verifying account', {
+            req,
+            action: 'verify-account',
+            userId,
+            error: err.message,
+            stack: err.stack,
+            status: 500,
+            durationMs: Date.now() - start,
+        });
         return res.status(500).json({
             msg: 'Could not verify email. Try again later.',
         });
