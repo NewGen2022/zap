@@ -89,7 +89,6 @@ const updateVerificationToken = async (tokenId) => {
             data: { isUsed: true },
         });
     } catch (err) {
-        console.error(err); // keep full log for debug
         throw new Error(
             `Error while updating verification token: ${err.message}`
         );
