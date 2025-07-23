@@ -1,36 +1,6 @@
-require('dotenv').config();
 const requestIp = require('request-ip');
-const Redis = require('redis');
 const logger = require('../utils/logger');
-
-const redisClient = Redis.createClient({
-    url: process.env.AUTH_REDIS_SERVER_URL,
-});
-redisClient.on('error', (err) =>
-    logger.error('Redis client error', {
-        service: 'auth-service',
-        action: 'redis',
-        error: err.message,
-        stack: err.stack,
-    })
-);
-redisClient.on('ready', () => {
-    logger.info('Redis client ready', { action: 'redis' });
-});
-const connectRedis = async () => {
-    try {
-        await redisClient.connect();
-        logger.info('Connected to Redis', { action: 'redis-connect' });
-    } catch (err) {
-        logger.error('Redis connection failed', {
-            action: 'redis-connect',
-            error: err.message,
-            stack: err.stack,
-        });
-    }
-};
-
-connectRedis();
+const { redisClient } = require('../clients/redis');
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_TIME = 15 * 60; // 15 minutes
