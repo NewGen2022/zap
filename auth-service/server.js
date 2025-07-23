@@ -3,6 +3,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const requestId = require('./middleware/requestId');
 const logger = require('./utils/logger');
+const logAction = require('./utils/logAction');
 const { connectAllClients, disconnectAllClients } = require('./clients/index');
 
 const userRouter = require('./routes/user');
@@ -36,10 +37,39 @@ server.use('/api/v1/auth', userRouter);
 server.use('/api/v1/auth', passwordRouter);
 server.use('/api/v1/auth', tokenRouter);
 
+server.use((req, res) => {
+    logAction('warn', 'Route not found', {
+        req,
+        action: '404',
+        status: 404,
+        method: req.method,
+        path: req.originalUrl,
+    });
+
+    return res.status(404).json({ msg: 'Not found' });
+});
+
+server.use((err, req, res, next) => {
+    logAction('error', 'Unhandled error', {
+        req,
+        action: 'unhandled-error',
+        status: 500,
+        error: err.message,
+        stack: err.stack,
+    });
+
+    return res.status(500).json({ msg: 'Internal server error' });
+});
+
 (async () => {
     try {
         await connectAllClients();
     } catch (err) {
+        logger.error('Startup clients failed', {
+            action: 'boot',
+            error: err.message,
+            stack: err.stack,
+        });
         process.exit(1);
     }
 
@@ -76,8 +106,8 @@ server.use('/api/v1/auth', tokenRouter);
         }, 10000).unref();
     }
 
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
     process.once('unhandledRejection', (r) =>
         shutdown('unhandledRejection', r)
     );
